@@ -8,82 +8,133 @@
   if (!root) return;
 
   const saved = (k, d) => store.get('qc_lobby_' + k) || d;
-  let mode = saved('mode', 'seek');
-  let level = saved('level', 'medium');
-  let colorChoice = saved('color', 'random');
+  const remember = (k, v) => store.set('qc_lobby_' + k, v);
   let data = { seeks: [], games: [], tcs: [], online: 0 };
   let connected = false;
   let message = '';
   const BOT_TCS = ['1+0', '3+2', '5+3', '10+5', '15+10', '30+0'];
 
   const sock = window.QC.socket('/ws/lobby', (m) => {
-    if (m.type === 'lobby') { data = m; connected = true; if (!data.seeks.some((s) => s.mine) && message.startsWith('Waiting')) message = ''; render(); }
-    else if (m.type === 'matched') location.href = '/game/' + m.game;
+    if (m.type === 'lobby') {
+      data = m; connected = true;
+      if (!data.seeks.some((s) => s.mine) && message.startsWith('Waiting')) message = '';
+      render();
+    } else if (m.type === 'matched') location.href = '/game/' + m.game;
     else if (m.type === 'challenge') location.href = '/challenge/' + m.token;
     else if (m.type === 'error') { message = m.message; render(); }
   });
 
-  const box = el('div', { class: 'lobby-grid' });
-  root.append(box);
-
-  function remember(k, v) { store.set('qc_lobby_' + k, v); }
+  // The Play panel is rebuilt only when what it shows changes, never just
+  // because a lobby update arrived: replacing a button between mousedown and
+  // mouseup swallows the click.
+  const createBox = el('div');
+  const sideBox = el('div', { class: 'lobby-side' });
+  root.append(el('div', { class: 'lobby-grid' }, [createBox, sideBox]));
+  let createKey = null;
 
   function render() {
-    box.textContent = '';
-    box.append(createPanel(), el('div', { class: 'lobby-side' }, [seeksPanel(), gamesPanel()]));
+    const mine = data.seeks.find((s) => s.mine);
+    const key = JSON.stringify([message, data.tcs, mine && mine.id]);
+    if (key !== createKey) {
+      createKey = key;
+      createBox.textContent = '';
+      createBox.append(createPanel(mine));
+    }
+    sideBox.textContent = '';
+    sideBox.append(seeksPanel(), gamesPanel());
   }
 
-  function picker(id, label, value, options, onchange) {
-    const sel = el('select', { id, onchange: () => onchange(sel.value) }, options.map(([v, t]) => el('option', { value: v, text: t })));
-    sel.value = value;
-    return el('label', {}, [document.createTextNode(label + ' '), sel]);
-  }
-
-  function createPanel() {
-    const modeBtn = (m, label) => el('button', {
-      type: 'button', class: 'tab' + (mode === m ? ' on' : ''), text: label,
-      onclick: () => { mode = m; remember('mode', m); message = ''; render(); },
-    });
-    const tcs = mode === 'bot' ? BOT_TCS : data.tcs;
+  /* Play card: the time grid pairs you with a person; the two buttons below
+   * open a setup dialog for the computer or a friend. */
+  function createPanel(mine) {
     const grid = el('div', { class: 'tc-grid' });
-    for (const tc of tcs) {
+    for (const tc of data.tcs) {
       grid.append(el('button', {
         type: 'button', class: 'tc', 'data-tc': tc, text: tc,
         onclick: () => {
-          if (mode === 'bot') {
-            const q = new URLSearchParams({ new: '1', tc, level, color: colorChoice });
-            location.href = '/local?' + q;
-          } else if (!connected) {
-            message = 'Connecting to the server…'; render();
-          } else if (mode === 'friend') {
-            sock.send({ type: 'challenge', tc, color: colorChoice });
-          } else {
-            sock.send({ type: 'seek', tc, color: colorChoice });
-            message = 'Waiting for an opponent (' + tc + ')…'; render();
-          }
+          sock.send({ type: 'seek', tc, color: 'random' });
+          message = 'Waiting for an opponent (' + tc + ')…'; render();
         },
       }));
     }
-    if (!tcs.length) grid.append(el('p', { class: 'muted', text: 'Connecting…' }));
-    const opts = [picker('opt-color', 'Play as', colorChoice, [['random', 'Random'], ['white', 'White'], ['black', 'Black']],
-      (v) => { colorChoice = v; remember('color', v); })];
-    if (mode === 'bot') {
-      opts.unshift(picker('opt-level', 'Level', level, [['easy', 'Easy'], ['medium', 'Medium'], ['hard', 'Hard']],
-        (v) => { level = v; remember('level', v); }));
+    if (!data.tcs.length) grid.append(el('p', { class: 'muted', text: 'Connecting to the server…' }));
+    let notice = el('span');
+    if (message) {
+      notice = el('p', { class: 'notice' }, [document.createTextNode(message + ' ')]);
+      if (mine && message.startsWith('Waiting')) {
+        notice.append(el('button', { type: 'button', class: 'linklike', text: 'Cancel',
+          onclick: () => { sock.send({ type: 'cancel', id: mine.id }); message = ''; render(); } }));
+      }
     }
-    const hint = {
-      seek: 'Anyone in the lobby can take your game.',
-      friend: 'You get a link to send to a friend.',
-      bot: 'The computer runs in your browser, so this works offline too.',
-    }[mode];
     return el('section', { class: 'card' }, [
-      el('h2', { text: 'Play' }),
-      el('div', { class: 'tabs' }, [modeBtn('seek', 'Quick pairing'), modeBtn('friend', 'Challenge a friend'), modeBtn('bot', 'Play the computer')]),
-      el('div', { class: 'opts' }, opts),
-      el('p', { class: 'muted small', text: hint }),
+      el('h2', { text: 'Play someone' }),
+      el('p', { class: 'muted small', text: 'Pick a time control and you are paired with the next person who does.' }),
       grid,
-      message ? el('p', { class: 'notice', text: message }) : el('span'),
+      notice,
+      el('div', { class: 'play-alt' }, [
+        el('button', { type: 'button', class: 'btn', id: 'play-computer', text: 'Play the computer', onclick: () => openSetup('bot') }),
+        el('button', { type: 'button', class: 'btn alt', id: 'play-friend', text: 'Challenge a friend', onclick: () => openSetup('friend') }),
+      ]),
     ]);
+  }
+
+  /* A row of toggle buttons; returns the element and calls onpick(value). */
+  function segmented(label, options, value, onpick, wide) {
+    const row = el('div', { class: 'seg-row' + (wide ? ' wide' : ''), role: 'group', 'aria-label': label });
+    const btns = options.map(([v, t]) => {
+      const b = el('button', { type: 'button', class: 'seg', 'data-value': v, text: t, 'aria-pressed': String(v === value) });
+      b.addEventListener('click', () => {
+        btns.forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+        onpick(v);
+      });
+      return b;
+    });
+    row.append(...btns);
+    return el('div', { class: 'seg-field' }, [el('div', { class: 'seg-label', text: label }), row]);
+  }
+
+  function openSetup(kind) {
+    if (document.querySelector('dialog.setup')) return;
+    const bot = kind === 'bot';
+    const tcs = bot ? BOT_TCS : (data.tcs.length ? data.tcs : BOT_TCS);
+    let tc = saved(kind + '_tc', bot ? '5+3' : '10+0');
+    if (!tcs.includes(tc)) tc = tcs[0];
+    let color = saved('color', 'random');
+    let level = saved('level', 'medium');
+    const dlg = el('dialog', { class: 'setup', 'aria-labelledby': 'setup-title' });
+    const close = () => { dlg.close(); dlg.remove(); };
+    const start = () => {
+      remember(kind + '_tc', tc); remember('color', color);
+      if (bot) {
+        remember('level', level);
+        location.href = '/local?' + new URLSearchParams({ new: '1', tc, level, color });
+      } else if (!connected) {
+        status.textContent = 'Still connecting to the server, try again in a moment.';
+      } else {
+        sock.send({ type: 'challenge', tc, color });
+        status.textContent = 'Creating the link…';
+      }
+    };
+    const status = el('p', { class: 'muted small' });
+    dlg.append(
+      el('h2', { id: 'setup-title', text: bot ? 'Play the computer' : 'Challenge a friend' }),
+      bot ? segmented('Level', [['easy', 'Easy'], ['medium', 'Medium'], ['hard', 'Hard']], level, (v) => { level = v; }) : el('span'),
+      segmented('Time', tcs.map((t) => [t, t]), tc, (v) => { tc = v; }, true),
+      segmented('You play', [['white', 'White'], ['random', 'Random'], ['black', 'Black']], color, (v) => { color = v; }),
+      el('p', { class: 'muted small', text: bot
+        ? 'The computer runs in your browser, so this works offline too.'
+        : 'You get a link to send to your friend. The game starts when they open it.' }),
+      status,
+      el('div', { class: 'setup-actions' }, [
+        el('button', { type: 'button', class: 'btn alt', text: 'Cancel', onclick: close }),
+        el('button', { type: 'button', class: 'btn', id: 'setup-start', text: bot ? 'Start game' : 'Create link', onclick: start }),
+      ]),
+    );
+    dlg.addEventListener('click', (e) => { if (e.target === dlg) close(); }); // click on the backdrop
+    dlg.addEventListener('close', () => dlg.remove());
+    document.body.append(dlg);
+    dlg.showModal();
+    dlg.querySelector('#setup-start').focus();
   }
 
   function seeksPanel() {

@@ -83,6 +83,18 @@
     return e;
   }
 
+  // Show script errors on the page instead of failing silently.
+  function showError(text) {
+    let bar = document.getElementById('qc-error');
+    if (!bar) {
+      bar = el('div', { id: 'qc-error', class: 'qc-error-bar', role: 'alert' });
+      document.body.prepend(bar);
+    }
+    bar.textContent = 'Something went wrong: ' + text;
+  }
+  window.addEventListener('error', (e) => showError((e.message || 'script error') + (e.filename ? ' (' + e.filename.split('/').pop() + ':' + e.lineno + ')' : '')));
+  window.addEventListener('unhandledrejection', (e) => showError(String((e.reason && e.reason.message) || e.reason)));
+
   window.QC = { pid, get name() { return name; }, wsUrl, socket, el, store };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', renderMe); else renderMe();
 })();

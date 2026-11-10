@@ -4,3 +4,17 @@
 #me input { width: 11em; padding: 3px 6px; }
 .local-bar { display: flex; gap: 8px; justify-content: center; margin: 14px 0; }
 .online { float: right; font-weight: 400; }
+.qc-error-bar { background: #5a1f1f; color: #fff; padding: 8px 16px; font-size: 14px; }
+.play-alt { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.play-alt .btn { text-align: center; padding: 12px 8px; }
+dialog.setup { background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; width: min(420px, calc(100vw - 32px)); }
+dialog.setup::backdrop { background: rgba(0, 0, 0, .6); }
+dialog.setup h2 { margin: 0 0 14px; font-size: 18px; }
+.seg-field { margin-bottom: 12px; }
+.seg-label { color: var(--muted); font-size: 13px; margin-bottom: 5px; }
+.seg-row { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; }
+.seg-row.wide { grid-auto-flow: row; grid-template-columns: repeat(3, 1fr); }
+button.seg { background: var(--panel2); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 8px 6px; font: inherit; cursor: pointer; }
+button.seg:hover { border-color: var(--accent2); }
+button.seg[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.setup-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
