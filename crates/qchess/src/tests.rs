@@ -702,3 +702,61 @@ fn ending_your_turn_in_quantum_check_collapses_the_checker() {
     assert_eq!(g.check(), Check::Full);
     assert!(g.clone().play("a6").is_err());
 }
+
+#[test]
+fn a_piece_never_shares_a_square_on_any_board() {
+    // White pawn split e3 | e4. A knight landing on e3 proves the pawn was
+    // on e4; a knight splitting onto e3 needs a collapse, because the board
+    // with both on e3 can't exist and the rest isn't a product of halves.
+    let f = "4k3/8/8/8/8/8/4P1N1/4K3 w - - 0 1";
+    let mut g = fen_game(f, &["e3/4", "Kd7"]);
+    let r = g.play("Ng2e3").unwrap();
+    assert_eq!(r.collapses, vec!["white pawn 1 collapsed to e4"]);
+    let g = fen_game(f, &["e3/4", "Kd7"]);
+    let mut opts = g.collapse_options("Ng2e3/h4").unwrap();
+    opts.sort();
+    assert_eq!(opts, ["{Nh4}", "{Pe4}"]);
+    for o in opts {
+        let mut t = g.clone();
+        t.play(&format!("Ng2e3/h4 {o}")).unwrap();
+        for b in t.states_fen() {
+            let row3 = b.split('/').nth(5).unwrap();
+            assert!(row3.matches(['N', 'P']).count() <= 1, "two pieces on one square: {b}");
+        }
+    }
+    // An enemy half: a split knight taking half a pawn is the rule sheet's
+    // "capturing using quantum pieces": either the knight collapses onto the
+    // capture square or the pawn onto its other square.
+    let mut g = Game::from_fen("4k3/4p3/8/8/6N1/8/8/4K3 b - - 0 1").unwrap();
+    play_all(&mut g, &["e6/5"]);
+    let mut opts = g.collapse_options("Ng4xe5/f6").unwrap();
+    opts.sort();
+    assert_eq!(opts, ["{Ne5}", "{Pe6}"]);
+}
+
+#[test]
+fn every_possible_board_has_a_real_chess_history() {
+    // The defining rule: collapse every superposition any way the game still
+    // allows, and the moves played must form an ordinary chess game. Checked
+    // move by move against an independent chess library (shakmaty): every
+    // board after a move must come from a board before it by a legal move of
+    // the piece that moved. By induction, every board's whole history is a
+    // legal chess game. Random quantum games (splits, two-half moves,
+    // collapse choices, castling, promotions) plus a few AI games.
+    let mut seed = 0x9E37_79B9_7F4A_7C15u64;
+    let mut byte = move || {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        (seed >> 24) as u8
+    };
+    // Debug builds are much slower; release (`cargo test --release`) runs more.
+    let games = if cfg!(debug_assertions) { 60 } else { 300 };
+    for _ in 0..games {
+        let data: Vec<u8> = (0..400).map(|_| byte()).collect();
+        crate::fuzzing::run(&data, 60);
+    }
+    for s in 0..3 {
+        crate::fuzzing::self_play(s, 60, 1, 60);
+    }
+}
