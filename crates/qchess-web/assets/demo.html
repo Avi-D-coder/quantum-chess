@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quantum chess board demo</title>
+<link rel="stylesheet" href="board.css">
+<style>
+ body{margin:0;background:#161512;color:#d8d6d0;font:14px system-ui,sans-serif}
+ .demo-bar{display:flex;flex-wrap:wrap;gap:6px;padding:8px 12px;background:#100f0d;border-bottom:1px solid #2a2824}
+ .demo-bar a{color:#b9b3ff;border:1px solid #34322d;border-radius:5px;padding:3px 9px;text-decoration:none;font-size:13px}
+ .demo-bar button{background:#262522;color:#d8d6d0;border:1px solid #34322d;border-radius:5px;padding:3px 9px;cursor:pointer}
+ #log{margin:0 12px 12px;padding:8px;background:#100f0d;color:#8b8982;font:12px ui-monospace,monospace;white-space:pre-wrap;max-height:120px;overflow:auto}
+ body.shot .demo-bar,body.shot #log{display:none}
+</style></head>
+<body>
+<div class="demo-bar" id="nav"></div>
+<div id="qgame" data-game-id="k3J9xQ2a" data-ws-url="/game/k3J9xQ2a/ws" data-manual></div>
+<pre id="log">sent messages appear here</pre>
+<script src="board.js"></script>
+<script>
+(function () {
+  const params = new URLSearchParams(location.search);
+  const demo = params.get('demo') || 'split';
+  if (params.has('shot')) document.body.classList.add('shot');
+  const log = document.getElementById('log');
+  let nextId = 1;
+  const P = (color, kind, ...sq) => ({ id: nextId++, color, split: sq.length > 1,
+    halves: sq.map((s) => ({ square: s, kind, alive: true })) });
+  const BACK = ['rook', 'knight', 'bishop', 'queen', 'king', 'bishop', 'knight', 'rook'];
+  function start() {
+    nextId = 1; const out = [];
+    'abcdefgh'.split('').forEach((f, i) => { out.push(P('white', BACK[i], f + '1')); out.push(P('white', 'pawn', f + '2'));
+      out.push(P('black', BACK[i], f + '8')); out.push(P('black', 'pawn', f + '7')); });
+    return out;
+  }
+  const clone = (x) => JSON.parse(JSON.stringify(x));
+  function move(pieces, from, to, to2) {
+    pieces = clone(pieces);
+    for (const p of pieces) for (const h of p.halves) if (h.square === to) h.alive = false;
+    const mv = pieces.find((p) => p.halves.some((h) => h.alive && h.square === from));
+    const h = mv.halves.find((x) => x.alive && x.square === from); h.square = to;
+    if (to2) { mv.halves.push({ square: to2, kind: h.kind, alive: true }); mv.split = true; }
+    return pieces;
+  }
+  const setSq = (pieces, color, kind, squares) => {
+    const p = pieces.find((x) => x.color === color && x.kind === kind && x.halves.some((h) => h.alive));
+    return p;
+  };
+  // ---- the rule-sheet position: e3/4 e5 Nf3 Nc6 Bb5/c4 Ne7/f6 0-0/ ; black to move
+  function rulesheet() {
+    nextId = 1; const w = 'white', b = 'black', pcs = [];
+    ['a', 'b', 'c', 'd', 'f', 'g', 'h'].forEach((f) => pcs.push(P(w, 'pawn', f + '2')));
+    pcs.push(P(w, 'pawn', 'e3', 'e4'));
+    pcs.push(P(w, 'rook', 'a1'), P(w, 'rook', 'f1'), P(w, 'knight', 'b1'), P(w, 'knight', 'f3'), P(w, 'bishop', 'c1'),
+      P(w, 'bishop', 'b5', 'c4'), P(w, 'queen', 'd1'), P(w, 'king', 'g1', 'e1'));
+    ['a', 'b', 'c', 'd', 'f', 'g', 'h'].forEach((f) => pcs.push(P(b, 'pawn', f + '7')));
+    pcs.push(P(b, 'pawn', 'e5'));
+    pcs.push(P(b, 'rook', 'a8'), P(b, 'rook', 'h8'), P(b, 'knight', 'c6'), P(b, 'knight', 'e7', 'f6'), P(b, 'bishop', 'c8'),
+      P(b, 'bishop', 'f8'), P(b, 'queen', 'd8'), P(b, 'king', 'e8'));
+    return pcs;
+  }
+  const players = { white: { username: 'avi', rating: 1512, provisional: false }, black: { username: 'bob', rating: 1500, provisional: true } };
+  const base = (extra) => Object.assign({
+    type: 'state', id: 'k3J9xQ2a', you: 'black', players,
+    clock: { initial_ms: 180000, increment_ms: 2000, white_ms: 171234, black_ms: 175000, running: 'black', server_now_ms: Date.now() },
+    to_move: 'black', status: { kind: 'ongoing' }, check: 'none', state_count: 16, pieces: rulesheet(),
+    targets: { a7: ['a6', 'a5'], b7: ['b6', 'b5'], c7: ['c5'], d7: ['d6', 'd5'], e5: ['e4'], f7: ['f5'], g7: ['g6', 'g5'], h7: ['h6', 'h5'],
+      c6: ['a5', 'b4', 'd4', 'b8'], e7: ['g8', 'g6', 'd5', 'f5'], f6: ['e4', 'g4', 'd5', 'h5', 'g8'], h8: ['g8'] },
+    last_move: ['g1', 'e1'], draw_offer: null, rated: true,
+    moves: [['e2e3/4', []], ['e7e5', []], ['Ng1f3', []], ['Nb8c6', []], ['Bf1b5/c4', []], ['Ng8e7/f6', ['{Pe4}']], ['0-0/', []]]
+      .map((m, i) => ({ ply: i + 1, notation: m[0], collapses: m[1] })),
+  }, extra || {});
+
+  // ---- finished game with positions (scholar's mate, with a split knight)
+  function finished() {
+    let p = start(); const positions = [{ pieces: clone(p), last_move: [] }];
+    const seq = [['e2', 'e4', 'e2e4'], ['e7', 'e5', 'e7e5'], ['d1', 'h5', 'Qd1h5'], ['b8', 'c6', 'Nb8c6'],
+      ['f1', 'c4', 'Bf1c4'], ['g8', 'f6', 'Ng8f6/h6', 'h6'], ['h5', 'f7', 'Qh5xf7']];
+    const moves = seq.map((s, i) => {
+      p = move(p, s[0], s[1], s[3]); positions.push({ pieces: clone(p), last_move: [s[0], s[1]].concat(s[3] ? [s[3]] : []) });
+      return { ply: i + 1, notation: s[2], collapses: i === 6 ? ['{xNf6}'] : [] };
+    });
+    return base({ you: 'white', status: { kind: 'ended', result: '1-0', termination: 'checkmate' }, to_move: 'black',
+      clock: { initial_ms: 180000, increment_ms: 2000, white_ms: 120400, black_ms: 98100, running: null, server_now_ms: Date.now() },
+      pieces: clone(p), targets: {}, state_count: 2, check: 'full', last_move: ['h5', 'f7'], moves, positions });
+  }
+  function quantumCheck() {
+    nextId = 1; const w = 'white', b = 'black';
+    const pcs = [P(w, 'king', 'g1'), P(w, 'pawn', 'f2'), P(w, 'pawn', 'g2'), P(w, 'pawn', 'h2'), P(w, 'rook', 'd1'), P(w, 'queen', 'e2'),
+      P(b, 'king', 'g8'), P(b, 'pawn', 'f7'), P(b, 'pawn', 'g7'), P(b, 'pawn', 'h7'), P(b, 'rook', 'e8'), P(b, 'queen', 'c4', 'a6'),
+      P(b, 'bishop', 'b4', 'c5')];
+    return base({ you: 'white', to_move: 'white', check: 'quantum', state_count: 6, pieces: pcs, last_move: ['a6', 'c4'],
+      clock: { initial_ms: 60000, increment_ms: 0, white_ms: 8400, black_ms: 41000, running: 'white', server_now_ms: Date.now() },
+      targets: { g1: ['h1', 'f1'], e2: ['f1', 'e1', 'e3', 'd3', 'c4', 'd2', 'f3'], d1: ['d2', 'd3', 'c1', 'e1', 'b1'], g2: ['g3', 'g4'], h2: ['h3', 'h4'], f2: ['f3', 'f4'] },
+      moves: [['e2e4', []], ['e7e5', []], ['Qd1e2', []], ['Qd8a5/c4', []]].map((m, i) => ({ ply: i + 1, notation: m[0], collapses: m[1] })) });
+  }
+  function promo() {
+    nextId = 1; const w = 'white', b = 'black';
+    const pcs = [P(w, 'king', 'g1'), P(w, 'pawn', 'e7'), P(w, 'pawn', 'a2'), P(b, 'king', 'g8'), P(b, 'rook', 'd8'), P(b, 'pawn', 'a7')];
+    return base({ you: 'white', to_move: 'white', state_count: 1, pieces: pcs, targets: { e7: ['e8', 'd8'], a2: ['a3', 'a4'], g1: ['g2', 'h1', 'h2', 'f1', 'f2'] },
+      last_move: ['d7', 'd8'], moves: [], clock: { initial_ms: 300000, increment_ms: 3000, white_ms: 120000, black_ms: 90000, running: 'white', server_now_ms: Date.now() } });
+  }
+
+  // ---- fake transport
+  function makeTransport() {
+    return { cb: null, send(o) { log.textContent = JSON.stringify(o) + '\n' + log.textContent; return true; },
+      onMessage(cb) { this.cb = cb; }, push(m) { this.cb && this.cb(m); } };
+  }
+  let current = null;
+  function load(name) {
+    if (current) current.destroy();
+    const el = document.getElementById('qgame');
+    const tr = makeTransport();
+    const fx = { split: base, splitmode: base, default: base, check: quantumCheck, promo, finished, collapse: base, spectator: () => base({ you: null }) }[name] || base;
+    current = QChess.mount(el, { transport: tr });
+    const st = typeof fx === 'function' ? fx() : fx;
+    tr.push(st);
+    tr.push({ type: 'chat', user: 'avi', text: 'good luck!', ts: Date.now() });
+    tr.push({ type: 'chat', user: 'bob', text: 'you too, that bishop is spooky', ts: Date.now() });
+    if (name === 'collapse') tr.push({ type: 'choose_collapse', notation: 'Nf6d5/', options: ['{xPd5}', '{Nd5}', '{Pd6}'] });
+    return { tr, el };
+  }
+  window.__load = load;
+  const nav = document.getElementById('nav');
+  [['split', 'Split position'], ['check', 'Quantum check'], ['promo', 'Promotion'], ['collapse', 'Collapse modal'], ['finished', 'Finished + replay'], ['spectator', 'Spectator']]
+    .forEach(([k, t]) => { const a = document.createElement('a'); a.href = '?demo=' + k; a.textContent = t; nav.appendChild(a); });
+  const { el } = load(demo);
+  const click = (sq) => el.querySelector('[data-sq="' + sq + '"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  const btn = (a) => el.querySelector('[data-action="' + a + '"]').click();
+  if (params.get('script') === 'split' || demo === 'splitmode') { btn('split'); click('e7'); click('d5'); }
+  if (params.get('script') === 'splitnormal') { btn('split'); click('d7'); click('d5'); }
+  if (params.get('script') === 'promo') { btn('split'); click('e7'); click('e8'); }
+  if (params.get('script') === 'promo2') { btn('split'); click('e7'); click('e8'); click('e8'); }
+  if (params.get('script') === 'hover') { el.querySelector('[data-sq="e7"]').dispatchEvent(new MouseEvent('mouseover', { bubbles: true })); }
+  if (params.get('script') === 'select') { click('f6'); }
+  if (params.get('script') === 'replay') { btn('go'); }
+})();
+</script></body></html>

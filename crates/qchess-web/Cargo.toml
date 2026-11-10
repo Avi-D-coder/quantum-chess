@@ -1,0 +1,36 @@
+[package]
+name = "qchess-web"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Web site for playing quantum chess online (Topcoat, SQLite)"
+publish = false
+
+[[bin]]
+name = "qchess-web"
+path = "src/main.rs"
+
+[dependencies]
+topcoat = { version = "0.11", features = ["websocket", "serve", "session", "cookie"] }
+tokio = { version = "1", features = ["full"] }
+qchess = { path = "../qchess" }
+qchess-play = { path = "../qchess-play" }
+glicko2 = { path = "../glicko2" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.37", features = ["bundled"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+rand = "0.9"
+base64 = "0.22"
+sha2 = "0.10"
+jsonwebtoken = "9"
+futures-util = "0.3"
+argon2 = { version = "0.5", optional = true }
+# Faster than the system allocator for the AI's many small allocations.
+mimalloc = { version = "0.1", default-features = false }
+
+[features]
+# Username/password sign-in for local testing. Never enable in production.
+test-auth = ["dep:argon2"]

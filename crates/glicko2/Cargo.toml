@@ -1,0 +1,10 @@
+[package]
+name = "glicko2"
+version = "0.1.0"
+edition = "2024"
+description = "Small std-only Glicko-2 rating implementation for chess sites"
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]

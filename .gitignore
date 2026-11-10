@@ -1,0 +1,41 @@
+/target
+/vendor
+/.env
+*.db
+*.db-*
+
+# Build output (also nested, e.g. crates/*/target)
+target/
+
+# Local databases (SQLite journal/WAL/SHM)
+*.sqlite
+*.sqlite3
+*.db-wal
+*.db-shm
+*.db-journal
+
+# Secrets and local config
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# Editor / OS junk
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# Fuzzing output (crates/qchess/fuzz/.gitignore already ignores these too)
+crates/qchess/fuzz/target/
+crates/qchess/fuzz/corpus/
+crates/qchess/fuzz/artifacts/
+crates/qchess/fuzz/coverage/
+
+# Keys (e.g. the Apple sign-in .p8)
+*.p8
+*.pem
+*.key

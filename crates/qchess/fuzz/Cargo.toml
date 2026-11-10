@@ -1,0 +1,22 @@
+[package]
+name = "qchess-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+qchess = { path = "..", features = ["fuzzing"] }
+
+# Not part of the main workspace.
+[workspace]
+
+[[bin]]
+name = "seq_token"
+path = "fuzz_targets/seq_token.rs"
+test = false
+doc = false
+bench = false

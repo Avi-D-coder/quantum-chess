@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --features qchess-web/test-auth -- -D warnings
+      - name: Tests
+        run: cargo test --workspace --features qchess-web/test-auth
+      - name: Board tests
+        run: node crates/qchess-web/assets/board.test.mjs
+
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Build on the minimum supported Rust
+        run: cargo check --workspace --all-targets

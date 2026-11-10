@@ -1,0 +1,29 @@
+[package]
+name = "qchess"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Quantum chess rules engine and AI (std only)"
+publish = false
+
+[dependencies]
+# Independent chess rules used only as a fuzzing oracle.
+shakmaty = { version = "0.27", optional = true }
+
+[features]
+# Exposes `qchess::fuzzing` for the cargo-fuzz targets in `fuzz/`.
+fuzzing = ["dep:shakmaty"]
+
+[dev-dependencies]
+shakmaty = "0.27"
+mimalloc = { version = "0.1", default-features = false }
+
+[[example]]
+name = "triage"
+required-features = ["fuzzing"]
+
+[[example]]
+name = "selfplay"
+required-features = ["fuzzing"]
