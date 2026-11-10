@@ -183,28 +183,18 @@ impl St {
         if !quantum {
             return;
         }
-        for i in 0..hs.len() {
-            // Split (only a king on one square: a piece has two halves).
-            if hs.len() == 1 {
-                for x in bits(q[0]) {
-                    for y in bits(q[0] & !(bit(x + 1) - 1)) {
-                        if !emit(x, y) {
-                            return;
-                        }
-                    }
-                }
-            }
-            // Move this half, keep the other (on its own square when the
-            // king isn't split).
-            let other = hs[hs.len() - 1 - i];
-            if !self.attacked(other) {
-                for x in bits(q[i]) {
-                    if !emit(x, other) {
+        // Split (only a king on one square: a piece has two halves). A move
+        // can't leave a half behind: on its boards nothing would have moved.
+        if hs.len() == 1 {
+            for x in bits(q[0]) {
+                for y in bits(q[0] & !(bit(x + 1) - 1)) {
+                    if !emit(x, y) {
                         return;
                     }
                 }
             }
         }
+        // Both halves of a split king move.
         if hs.len() == 2 {
             for x in bits(q[0]) {
                 for y in bits(q[1]) {

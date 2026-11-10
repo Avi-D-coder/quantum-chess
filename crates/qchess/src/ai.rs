@@ -20,7 +20,7 @@
 //!   collapse option becomes a move of its own, and the game stays
 //!   deterministic.
 //! * Moves come from the same notation the players type: whole moves, splits
-//!   (`Nc3/a3`), stays (`e4/`), moves of both halves (`Nc3/Nd4`), split
+//!   (`Nc3/a3`), moves of both halves (`Nc3/Nd4`), split
 //!   promotions (`e8=Q/N`) and quantum castling (`0-0/`). Each candidate is
 //!   played on a copy of the game, and only accepted moves are kept, so the
 //!   AI can never play an illegal move.
@@ -61,7 +61,7 @@ pub struct Config {
     /// Stop deepening once this much time has passed (the last finished
     /// iteration's move is played).
     pub time: Option<Duration>,
-    /// Consider splits, stays and two-half moves, not only whole moves.
+    /// Consider splits and two-half moves, not only whole moves.
     /// Without them the search is much faster but plays "classical" chess
     /// on a quantum board.
     pub quantum_moves: bool,
@@ -315,7 +315,7 @@ struct Mv {
     cube: Option<(u32, u32)>,
 }
 
-/// Splits, stays, two-half moves and quantum castling.
+/// Splits, two-half moves and quantum castling.
 fn is_quantum(i: &Intent) -> bool {
     matches!(i, Intent::Castle { split: true, .. } | Intent::Move { second: Some(_), .. })
 }
@@ -381,7 +381,6 @@ fn candidates(g: &Game, quantum: bool, captures_only: bool) -> Vec<Intent> {
                     }
                     if quantum && !captures_only {
                         out.push(from_to(h.kind, h.sq, t, Some(Kind::Queen), to_sq(t, Some(Kind::Knight))));
-                        out.push(from_to(h.kind, h.sq, t, Some(Kind::Queen), Some(Second::Stay)));
                     }
                 } else {
                     out.push(from_to(h.kind, h.sq, t, None, None));
@@ -390,9 +389,6 @@ fn candidates(g: &Game, quantum: bool, captures_only: bool) -> Vec<Intent> {
                     continue;
                 }
                 let pr = promotes.then_some(Kind::Queen);
-                if !promotes {
-                    out.push(from_to(h.kind, h.sq, t, None, Some(Second::Stay)));
-                }
                 for &t2 in ts.iter().filter(|&&t2| by_name(t2) > by_name(t)) {
                     let pr2 = (pawn && last_rank(t2)).then_some(Kind::Queen);
                     out.push(from_to(h.kind, h.sq, t, pr, to_sq(t2, pr2)));
@@ -941,24 +937,26 @@ mod tests {
         assert_eq!(classical.len(), 20, "{:?}", classical.iter().map(|c| &c.notation).collect::<Vec<_>>());
         let all = children(&g, true);
         assert!(all.iter().any(|c| c.notation == "Nb1a3/c3"));
-        assert!(all.iter().any(|c| c.notation == "e2e4/"));
-        assert!(all.len() > 40);
+        assert!(all.iter().any(|c| c.notation == "e2e3/e4"));
+        // Never a stay move: it would leave boards where nothing moved.
+        assert!(all.iter().all(|c| !c.notation.trim_end().ends_with('/')), "stay move generated");
+        assert!(all.len() > 25, "{}", all.len());
     }
 
     #[test]
     fn every_collapse_choice_is_its_own_move() {
-        // White knight split c3/a3, black pawn split d5/d6: Nxd5/ forces a
+        // White knight split c3/a3, black pawn split d5/d6: Nc3d5/a3b5 forces a
         // collapse with two options.
         let mut g = Game::new();
         for m in ["Nc3/a3", "d5/6"] {
             g.play(m).unwrap();
         }
-        let opts = g.collapse_options("Nc3d5/").unwrap();
+        let opts = g.collapse_options("Nc3d5/a3b5").unwrap();
         assert_eq!(opts.len(), 2);
         let kids: HashSet<u64> = children(&g, true).iter().map(|c| c.game.position_key()).collect();
         for o in opts {
             let mut c = g.clone();
-            c.play(&format!("Nc3d5/ {o}")).unwrap();
+            c.play(&format!("Nc3d5/a3b5 {o}")).unwrap();
             assert!(kids.contains(&c.position_key()), "{o}");
         }
     }

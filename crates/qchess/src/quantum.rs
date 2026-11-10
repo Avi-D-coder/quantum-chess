@@ -234,7 +234,6 @@ impl States {
 enum Action {
     To { to: Sq, promo: Option<Kind> },
     Castle(usize),
-    Stay,
     RookTo { from: Sq, to: Sq },
 }
 
@@ -462,7 +461,6 @@ impl Position {
     /// and every minimal collapse the mover could choose between.
     fn analyze(&self, prev: &States, intent: &Intent) -> Result<Analysis, QError> {
         let plan = self.plan(prev, intent)?;
-        let me = self.turn;
         // Every board reachable by a legal classical branch from a previous state.
         let mut reach: Vec<Key> = Vec::with_capacity(prev.list.len() * plan.branches.len());
         let mut real_move = false;
@@ -478,13 +476,6 @@ impl Position {
                     Action::To { to, promo } => b.find_move(br.from, to, promo),
                     Action::Castle(side) => b.find_castle(br.from, side),
                     Action::RookTo { from, to } => b.find_move(from, to, None),
-                    Action::Stay => {
-                        if !b.in_check(me) {
-                            reach.push(key(b));
-                            used[bi] = true;
-                        }
-                        continue;
-                    }
                 };
                 if let Some(m) = m {
                     reach.push(b.key_after(m));
@@ -872,36 +863,13 @@ impl Position {
                 }
             }
             Some(Second::Stay) => {
-                let movers: Vec<_> = cands.iter().filter(|c| c.0 == piece).collect();
-                if !p.is_split() {
-                    dest[0] = Some((to, new_kind(p.h[0].kind, to, promo)));
-                    branches.push(to_branch(locs[0], to, promo));
-                    branches.push(Branch {
-                        from: locs[0].1,
-                        kind: locs[0].2,
-                        action: Action::Stay,
-                    });
-                } else if locs.len() < 2 {
-                    return Err(QError("illegal move: can't split a piece that is partly captured".into()));
-                } else if movers.len() > 1 {
-                    return Err(QError(format!(
-                        "ambiguous: both halves can reach {}; say which, e.g. {}{}{}/",
-                        sq_name(to),
-                        if kind == Kind::Pawn { String::new() } else { kind.letter().to_string() },
-                        sq_name(movers[0].2),
-                        sq_name(to)
-                    )));
-                } else {
-                    let (_, hm, sm, km) = *movers[0];
-                    dest[hm] = Some((to, new_kind(km, to, promo)));
-                    branches.push(to_branch((hm, sm, km), to, promo));
-                    let o = locs.iter().find(|l| l.0 != hm).copied().unwrap_or(locs[0]);
-                    branches.push(Branch {
-                        from: o.1,
-                        kind: o.2,
-                        action: Action::Stay,
-                    });
-                }
+                // On the boards where the staying half was the real one,
+                // nothing would have moved: not a legal chess move. Only
+                // quantum castling leaves half the king home, because the
+                // rook moves on those boards.
+                return Err(QError(
+                    "illegal move: a piece can't leave half of itself behind (only quantum castling, 0-0/ or 0-0-0/, keeps half the king home)".into(),
+                ));
             }
             Some(Second::To {
                 hint: hint2,

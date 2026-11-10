@@ -41,7 +41,6 @@
     }
     let s = L + from + to;
     if (promo) s += '=' + String(promo).toUpperCase();
-    if (stay) return s + '/';
     if (to2 || promo2) {
       s += '/';
       if (from2) s += from2;
@@ -90,69 +89,90 @@
   const needsPromo = (kind, to, you) =>
     kind === 'pawn' && ((you === 'white' && to[1] === '8') || (you === 'black' && to[1] === '1'));
 
-  function newInput(split) {
-    return { split: !!split, phase: 'idle', from: null, to: null, from2: null, to2: null,
+  /* Move input. Every move says where both halves of a piece go, so there
+   * is no "normal move" default and no split mode:
+   *   1. pick a piece (one of its halves) and where that half goes;
+   *   2. pick where the other half goes: the same square is an ordinary
+   *      move (or, for a split piece, the halves rejoining); another square
+   *      splits the piece (or moves each half of a split piece).
+   * Quantum castling offers the king's own square as the second square.
+   * Moving only one half of a split piece is legal but collapses the piece
+   * onto that half; it is a separate, explicit action ('only'). Leaving half
+   * of a piece behind is never legal (except quantum castling). */
+  function newInput() {
+    return { phase: 'idle', from: null, to: null, from2: null, to2: null,
       stay: false, promo: null, promo2: null, kind: null, other: null };
   }
 
-  function advance(ui, ctx) {
+  const isCastle = (ui) => ui.kind === 'king' && ui.from && ui.to && !ui.other &&
+    (ui.from === 'e1' || ui.from === 'e8') && ui.to[1] === ui.from[1] &&
+    Math.abs(ui.to.charCodeAt(0) - ui.from.charCodeAt(0)) === 2;
+
+  /** Squares the second half may go to (phase 'second'). */
+  function secondTargets(ui, ctx) {
+    const tg = ctx.targets || {};
+    if (ui.other) return tg[ui.other] || [];
+    if (isCastle(ui)) return [ui.to, ui.from];
+    // A split can't combine castling with a king step.
+    return (tg[ui.from] || []).filter((t) => t === ui.to || !(ui.kind === 'king' && isCastle({ kind: 'king', from: ui.from, to: t })));
+  }
+  /** For a split piece: can the move be made by moving only the chosen half? */
+  const onlyThisHalf = (ui, ctx) => ui.phase === 'second' && !!ui.other && !(((ctx.targets || {})[ui.other] || []).includes(ui.to));
+
+  function finish(ui, ctx) {
     if (needsPromo(ui.kind, ui.to, ctx.you) && !ui.promo) { ui.phase = 'promo1'; return { ui }; }
+    if (ui.phase === 'promo1' || ui.phase === 'first') { ui.phase = 'second'; return { ui }; }
     if (ui.to2 && !ui.stay && needsPromo(ui.kind, ui.to2, ctx.you) && !ui.promo2) { ui.phase = 'promo2'; return { ui }; }
-    const notation = buildNotation(ui);
-    return { ui: newInput(false), notation };
+    const o = Object.assign({}, ui);
+    if (o.to2 === o.to && !o.from2) {
+      // Both halves on one square: an ordinary move, unless a pawn promotes
+      // into two different pieces.
+      if (!(o.promo2 && o.promo2 !== o.promo)) { o.to2 = null; o.promo2 = null; }
+    } else if (o.from2 && o.to2 === o.to) {
+      // The halves of a split piece rejoin: a whole move.
+      o.from2 = null; o.to2 = null; o.promo2 = null;
+    }
+    return { ui: newInput(), notation: buildNotation(o) };
   }
 
   /** Pure input state machine. ctx = {you, pieces, targets}.
-   *  actions: {t:'click', sq, shift}, {t:'stay'}, {t:'promo', p}, {t:'toggleSplit'}, {t:'cancel'}
+   *  actions: {t:'click', sq}, {t:'only'}, {t:'promo', p}, {t:'cancel'}
    *  returns {ui, notation?}. */
   function reduceInput(ui0, a, ctx) {
-    const ui = Object.assign({}, ui0 || newInput(false));
+    const ui = Object.assign({}, ui0 || newInput());
     const tg = ctx.targets || {};
     switch (a.t) {
-      case 'toggleSplit':
-        if (ui.phase === 'idle' || ui.phase === 'target') { ui.split = !ui.split; return { ui }; }
-        return { ui: newInput(false) };
       case 'cancel':
-        return { ui: newInput(false) };
-      case 'stay':
-        if (ui.phase !== 'second') return { ui };
-        ui.stay = true;
-        return advance(ui, ctx);
+        return { ui: newInput() };
+      case 'only':
+        if (!onlyThisHalf(ui, ctx)) return { ui };
+        return { ui: newInput(), notation: buildNotation({ kind: ui.kind, from: ui.from, to: ui.to, promo: ui.promo }) };
       case 'promo':
-        if (ui.phase === 'promo1') ui.promo = a.p;
-        else if (ui.phase === 'promo2') ui.promo2 = a.p;
-        else return { ui };
-        return advance(ui, ctx);
+        if (ui.phase === 'promo1') { ui.promo = a.p; return finish(ui, ctx); }
+        if (ui.phase === 'promo2') { ui.promo2 = a.p; return finish(ui, ctx); }
+        return { ui };
       case 'click': {
         const sq = a.sq;
-        if (a.shift && (ui.phase === 'idle' || ui.phase === 'target')) ui.split = true;
-        const own = ownHalfAt(ctx.pieces, ctx.you, sq);
-        if (ui.phase === 'idle' || ui.phase === 'target') {
-          if (ui.phase === 'target' && (tg[ui.from] || []).includes(sq)) {
+        if (ui.phase === 'idle' || ui.phase === 'first') {
+          if (ui.phase === 'first' && (tg[ui.from] || []).includes(sq)) {
             ui.to = sq;
-            if (!ui.split) return advance(ui, ctx);
-            ui.phase = 'second';
+            return finish(ui, ctx);
+          }
+          const own = ownHalfAt(ctx.pieces, ctx.you, sq);
+          if (own && ((tg[sq] || []).length || (own.other && (tg[own.other] || []).length))) {
+            if (ui.phase === 'first' && ui.from === sq) return { ui: newInput() };
+            if (!(tg[sq] || []).length) return { ui: newInput() };
+            Object.assign(ui, newInput(), { from: sq, kind: own.half.kind || own.piece.kind, other: own.other, phase: 'first' });
             return { ui };
           }
-          if (own && (tg[sq] || []).length) {
-            if (ui.phase === 'target' && ui.from === sq) return { ui: newInput(ui.split) };
-            ui.from = sq; ui.kind = own.half.kind || own.piece.kind; ui.other = own.other; ui.phase = 'target';
-            return { ui };
-          }
-          return { ui: newInput(ui.split) };
+          return { ui: newInput() };
         }
         if (ui.phase === 'second') {
-          if (ui.other) {
-            if (sq === ui.other) { ui.from2 = sq; ui.phase = 'second2'; return { ui }; }
-          } else if ((tg[ui.from] || []).includes(sq) && (sq !== ui.to || needsPromo(ui.kind, sq, ctx.you))) {
-            ui.to2 = sq;
-            return advance(ui, ctx);
-          }
-          return { ui: newInput(false) };
-        }
-        if (ui.phase === 'second2') {
-          if ((tg[ui.from2] || []).includes(sq)) { ui.to2 = sq; return advance(ui, ctx); }
-          return { ui: newInput(false) };
+          if (!secondTargets(ui, ctx).includes(sq)) return { ui: newInput() };
+          if (isCastle(ui) && sq === ui.from) { ui.stay = true; ui.to2 = null; return finish(ui, ctx); }
+          if (ui.other) ui.from2 = ui.other;
+          ui.to2 = sq;
+          return finish(ui, ctx);
         }
         return { ui }; // promo phases: ignore board clicks
       }
@@ -347,7 +367,7 @@
       // Positions of a game in progress (start + one per move), kept up to
       // date from each state message; `null` until loaded.
       this.hist = null; this.histLoading = false;
-      this.input = newInput(false);
+      this.input = newInput();
       this.hover = null; this.chat = []; this.collapse = null; this.toast = null;
       this.confirmResign = false; this.conn = 'open'; this.offset = 0;
       this.build();
@@ -399,16 +419,16 @@
         this.state = m;
         if (!m.positions) this.trackHistory(m);
         if (m.clock) this.offset = Date.now() - m.clock.server_now_ms;
-        this.input = newInput(false);
+        this.input = newInput();
         this.collapse = null; this.confirmResign = false;
         if (this.positions && this.view != null && this.view > this.lastIdx) this.view = null;
         this.renderAll();
       } else if (m.type === 'choose_collapse') {
-        this.collapse = m; this.input = newInput(false); this.renderModal(); this.renderBoard();
+        this.collapse = m; this.input = newInput(); this.renderModal(); this.renderBoard();
       } else if (m.type === 'chat') {
         this.chat.push(m); if (this.chat.length > 200) this.chat.shift(); this.renderChat();
       } else if (m.type === 'error') {
-        this.collapse = null; this.input = newInput(false);
+        this.collapse = null; this.input = newInput();
         this.showToast(m.message || 'Error'); this.renderModal(); this.renderBoard();
       }
     }
@@ -533,8 +553,7 @@
     }
     action(name, node) {
       switch (name) {
-        case 'split': this.dispatch({ t: 'toggleSplit' }); break;
-        case 'stay': this.dispatch({ t: 'stay' }); break;
+        case 'only': this.dispatch({ t: 'only' }); break;
         case 'flip': this.flip = !this.flip; this.renderBoard(); this.renderPlayers(); break;
         case 'promo': this.dispatch({ t: 'promo', p: node.getAttribute('data-p') }); break;
         case 'resign': this.confirmResign = true; this.renderButtons(); break;
@@ -561,7 +580,7 @@
       if (!this.state) return;
       if (e.key === 'Escape') {
         if (this.collapse) { this.collapse = null; this.renderModal(); }
-        else if (this.input.phase !== 'idle' || this.input.split) this.dispatch({ t: 'cancel' });
+        else if (this.input.phase !== 'idle') this.dispatch({ t: 'cancel' });
         return;
       }
       const tag = (e.target && e.target.tagName) || '';
@@ -582,7 +601,7 @@
       if (!this.positions) return;
       i = Math.max(0, Math.min(this.lastIdx, i));
       this.view = i >= this.lastIdx ? null : i;
-      this.input = newInput(false);
+      this.input = newInput();
       this.renderBoard(); this.renderMoves(); this.renderReplay(); this.renderBar(); this.renderPromo();
     }
     setHover(sq) {
@@ -611,13 +630,13 @@
       const own = (sq) => interactive && ownHalfAt(s.pieces, this.you, sq);
       let targets = [], extra = {};
       if (interactive) {
-        if (inp.phase === 'target' || (inp.phase === 'second' && !inp.other)) targets = tg[inp.from] || [];
-        else if (inp.phase === 'second2') targets = tg[inp.from2] || [];
+        if (inp.phase === 'first') targets = tg[inp.from] || [];
+        else if (inp.phase === 'second') targets = secondTargets(inp, this.ctx());
       }
       if (inp.from) extra[inp.from] = 'sel';
       if (inp.to) extra[inp.to] = 'sel2';
       if (inp.from2) extra[inp.from2] = 'sel';
-      if (inp.phase === 'second' && inp.other) extra[inp.other] = 'pick';
+      if (inp.phase === 'second' && inp.other) extra[inp.other] = 'sel';
 
       let sqs = '', hl = '', coords = '', pcs = '', conn = '', tgt = '';
       for (let f = 0; f < 8; f++) for (let r = 0; r < 8; r++) {
@@ -657,7 +676,7 @@
         tgt += occ ? '<circle class="qc-cap" cx="' + (x + 50) + '" cy="' + (y + 50) + '" r="46"/>'
           : '<circle class="qc-dot" cx="' + (x + 50) + '" cy="' + (y + 50) + '" r="15"/>';
       }
-      if (inp.to) { // ghost marker for first destination in split mode
+      if (inp.to) { // marker for the first half's destination
         const { x, y } = this.sqXY(inp.to);
         tgt += '<circle class="qc-first" cx="' + (x + 50) + '" cy="' + (y + 50) + '" r="36"/>' +
           '<text class="qc-firstn" x="' + (x + 50) + '" y="' + (y + 64) + '" text-anchor="middle">1</text>';
@@ -727,7 +746,7 @@
     renderPromo() {
       const ph = this.input.phase;
       if (ph !== 'promo1' && ph !== 'promo2') { this.promoEl.hidden = true; this.promoEl.innerHTML = ''; return; }
-      const label = ph === 'promo2' ? 'Promote the other half to' : (this.input.split ? 'Promote first half to' : 'Promote to');
+      const label = ph === 'promo2' ? 'Promote the other half to (the same piece for an ordinary promotion)' : 'Promote this half to';
       let h = '<div class="qc-promo-t">' + label + '</div><div class="qc-promo-row">';
       for (const [p, k] of [['Q', 'queen'], ['R', 'rook'], ['B', 'bishop'], ['N', 'knight']]) {
         h += '<button type="button" data-action="promo" data-p="' + p + '" aria-label="Promote to ' + k + '">' +
@@ -756,19 +775,20 @@
       if (!this.state) return;
       const inp = this.input, mine = this.canMove;
       let h = '';
-      if (mine) {
-        h += '<button type="button" data-action="split" class="qc-split' + (inp.split ? ' on' : '') +
-          '" aria-pressed="' + inp.split + '" title="Hold Shift while clicking for the same effect">⑂ Split</button>';
-        if (inp.phase === 'second') h += '<button type="button" data-action="stay" class="qc-stay">Stay</button>';
+      if (mine && onlyThisHalf(inp, this.ctx())) {
+        h += '<button type="button" data-action="only" class="qc-only" title="Legal, but it proves the piece was on ' +
+          esc(inp.from) + ', so it collapses there">Move only this half (collapses it to ' + esc(inp.from) + ')</button>';
       }
       let hint = '';
       if (!this.isLive) hint = 'Viewing move ' + this.viewIdx + ' of ' + this.lastIdx;
       else if (mine) {
+        const castle = inp.phase === 'second' && isCastle(inp);
         hint = ({
-          idle: inp.split ? 'Split: pick a piece' : 'Your move — pick a piece',
-          target: inp.split ? 'Split: choose the first destination' : 'Choose a destination',
-          second: inp.other ? 'Click the other half to move it, or Stay' : 'Choose the second destination, or Stay',
-          second2: 'Choose where the other half goes',
+          idle: 'Your move: pick a piece',
+          first: inp.other ? 'Where does the half on ' + inp.from + ' go?' : 'Where does one half go?',
+          second: castle ? 'Same square to castle, or the king\'s square to quantum castle (half the king stays)'
+            : inp.other ? 'Where does the other half (' + inp.other + ') go? The same square rejoins them'
+            : 'Where does the other half go? The same square is an ordinary move',
           promo1: 'Choose a promotion piece', promo2: 'Choose a promotion piece',
         })[inp.phase] || '';
       } else if (this.you && !this.ended) hint = 'Opponent to move';
@@ -910,7 +930,7 @@
     return mount(el, { transport, historyUrl });
   }
 
-  return { mount, autoMount, GameClient, buildNotation, reduceInput, newInput, ownHalfAt, twinsOf, squareMap,
+  return { mount, autoMount, GameClient, buildNotation, reduceInput, newInput, secondTargets, ownHalfAt, twinsOf, squareMap,
     describeOption, badgeText, pieceName, clockMs, formatClock, groupMoves, resultBanner, statusLine, describeSquare, needsPromo,
     kindLetter, KIND_FROM_LETTER };
 });

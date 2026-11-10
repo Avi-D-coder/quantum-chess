@@ -77,9 +77,7 @@
 
 .qc-bar { display: flex; align-items: center; gap: 8px; min-height: 38px; padding: 4px 0; }
 .qc-hint { color: var(--muted); flex: 1; font-size: 13px; }
-.qc-split.on { background: var(--q); border-color: var(--q); color: #120d33; font-weight: 700; }
-.qc-split.on:hover:not(:disabled) { background: #b0a0ff; }
-.qc-stay { border-color: var(--q); color: #cfc6ff; }
+.qc-only { border-color: var(--q); color: #cfc6ff; }
 .qc-promo { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: rgba(22,21,18,.96);
   border: 1px solid var(--q); border-radius: 10px; padding: 10px 12px; box-shadow: 0 8px 30px #000a; z-index: 3; text-align: center; }
 .qc-promo[hidden], .qc-modal[hidden] { display: none; }

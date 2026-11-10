@@ -20,16 +20,21 @@ A piece that is already split cannot split again until it has collapsed.
 
 | Notation | Move |
 |---|---|
-| `Nf3`, `exd5` | **Whole move**: the piece moves as in ordinary chess. For a split piece, each half that can reach the square goes there, and the piece is whole again. |
+| `Nf3`, `exd5` | **Whole move**: the piece moves as in ordinary chess. For a split piece, each half that can reach the square goes there, and the piece is whole again; if only one half can, the move proves the piece was there, so it collapses onto that half. |
+| `Na3b5/c3d5` | **Both halves of a split piece move**, each to its own square. |
 | `Bb5/c4` | **Split**: one half goes to b5, the other to c4. Each must be a legal destination for the piece. |
 | `e3/4` | Shorthand split that keeps the file: e3 and e4. |
-| `Nxd5/` | **Stay**: one half moves to d5, the other stays where it is. |
-| `0-0/`, `0-0-0/` | **Quantum castling**: the rook moves, and half the king castles. |
+| `0-0/`, `0-0-0/` | **Quantum castling**: the rook moves, and half the king castles; the other half stays home and keeps its castling rights. |
 | `e8=Q/N` | Promote into two different pieces on e8, one per half. |
 | `Ncd5/eg6` | Disambiguation, given separately for each half. |
 
 A move is legal if it is a legal ordinary-chess move on at least one of the
 possible boards. Your own king must be safe on the boards that survive.
+
+Every board that survives must come from a previous board by a legal
+ordinary-chess move. So a piece can never leave half of itself behind (on
+those boards nothing would have moved); the one exception is quantum
+castling, where the rook moves on the boards where the king stayed.
 
 Trailing `+`, `#`, `?` and `!` are ignored. See [`notation.rs`](../crates/qchess/src/notation.rs)
 for the full grammar.

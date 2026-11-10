@@ -289,6 +289,10 @@ Hard uses it to search deeper in the same time.
 
 ## Endgame research: K+B+N against a king that may split
 
+> **Out of date.** The numbers below were computed when the engine still allowed
+> "stay" moves (one half moves, the other stays put), which the rules don't allow.
+> The solvers now follow the corrected rules; the results need to be solved again.
+
 `crates/qchess/examples/qkbn.rs` solves this ending exactly (it scores every
 position, 85 million per side up to symmetry, in about 4 minutes on 16 cores). Black's king may be
 on one square or split across two; White plays ordinary, unsplit moves. The solver has its own

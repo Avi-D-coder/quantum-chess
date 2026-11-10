@@ -91,7 +91,6 @@ accepts `[file][rank]` hints):
 | move piece b1→c3 | `Nb1c3` |
 | pawn e2→e4 | `e2e4` |
 | split b1→c3 and a3 | `Nb1c3/a3` |
-| split; one half goes, the other stays | `Nb1c3/` |
 | split piece: half on a3→b5, half on c3→d5 | `Na3b5/c3d5` |
 | promotion | `e7e8=Q`; split promotion `e7e8=Q/=N` |
 | castling (king e1→g1 or c1) | `0-0`, `0-0-0`; split castling `0-0/` |

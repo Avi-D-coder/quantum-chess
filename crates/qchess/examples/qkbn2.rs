@@ -199,7 +199,8 @@ enum Mover {
     Knight,
 }
 
-/// A branch: the moving half on `from` goes to `to`, or stays (`None`).
+/// A branch: the moving half on `from` goes to `to`. (`None`, staying put, is
+/// never a legal move; it is kept only so the resolver stays general.)
 type Branch = (u8, Option<u8>);
 
 /// Works out one move the way the engine does and reports each outcome
@@ -353,9 +354,6 @@ fn king_moves(q: &Q, white: bool, quantum: bool, f: &mut impl FnMut(Out) -> bool
     if hs.len() == 1 {
         let h = hs[0];
         for t in bits(ts[0]) {
-            if !resolve(q, mover, pair(t, h), &[(h, Some(t)), (h, None)], f) {
-                return false;
-            }
             for t2 in bits(ts[0] & !(bit(t + 1) - 1)) {
                 if !resolve(q, mover, pair(t, t2), &[(h, Some(t)), (h, Some(t2))], f) {
                     return false;
@@ -363,14 +361,6 @@ fn king_moves(q: &Q, white: bool, quantum: bool, f: &mut impl FnMut(Out) -> bool
             }
         }
     } else {
-        for i in 0..2 {
-            let (h, o) = (hs[i], hs[1 - i]);
-            for t in bits(ts[i]) {
-                if !resolve(q, mover, pair(t, o), &[(h, Some(t)), (o, None)], f) {
-                    return false;
-                }
-            }
-        }
         for t0 in bits(ts[0]) {
             for t1 in bits(ts[1] & !bit(t0)) {
                 if !resolve(q, mover, pair(t0, t1), &[(hs[0], Some(t0)), (hs[1], Some(t1))], f) {

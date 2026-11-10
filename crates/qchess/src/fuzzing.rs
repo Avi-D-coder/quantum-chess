@@ -100,8 +100,8 @@ mod oracle {
 }
 
 /// Rule 3: every board after the move comes from a previous board by a legal
-/// regular-chess move from one of the squares the move left (or is that
-/// previous board unchanged when one half stays).
+/// regular-chess move from one of the squares the move left. (Leaving a
+/// board unchanged is never allowed: stay moves are illegal.)
 fn check_reachable(prev: &Game, g: &Game, notation: &str) {
     if prev.state_count() > 256 || g.state_count() > 256 {
         return;
@@ -109,19 +109,8 @@ fn check_reachable(prev: &Game, g: &Game, notation: &str) {
     let white = prev.to_move() == crate::Color::White;
     let before: Vec<String> = prev.states_fen();
     let moved: Vec<String> = g.last_move_squares();
-    // A "stay" split ends in '/', before any {collapse} or +#?! annotations.
-    let stays = notation
-        .split('{')
-        .next()
-        .unwrap_or("")
-        .trim()
-        .trim_end_matches(['+', '#', '?', '!', ' '])
-        .ends_with('/');
     let mut reachable = std::collections::HashSet::new();
     for b in &before {
-        if stays {
-            reachable.insert(b.clone());
-        }
         for p in oracle::variants(b, white) {
             for m in oracle::legal_moves(&p) {
                 if m.from().is_some_and(|f| moved.contains(&f.to_string())) {

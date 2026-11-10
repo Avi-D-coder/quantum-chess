@@ -71,24 +71,76 @@ fn pawn_capture_removes_both_halves() {
 
 #[test]
 fn half_capture_forces_a_collapse() {
-    // Default: the capturing knight collapses onto d5 (the capture "happened"
-    // in every state where the pawn was there).
+    // Rule sheet, "Capturing Using Quantum Pieces": the split knight moves
+    // both halves, c3 takes on d5 and a3 goes to b5. The board "knight on
+    // b5, pawn captured" is impossible, so either the knight collapses onto
+    // d5 or the pawn onto d6 (it wasn't captured). The mover picks.
     let mut g = game(&["Nc3/a3", "d5/6"]);
     assert_eq!(g.state_count(), 4);
-    let r = g.play("Nxd5/").unwrap();
+    let r = g.play("Ncxd5/ab5 {Nd5}").unwrap();
     assert_eq!(r.collapses, vec!["white knight 1 collapsed to d5"]);
     assert_eq!(g.state_count(), 2);
     assert!(g.board_text().contains("black pawn: captured on d5 | d6"), "{}", g.board_text());
 
-    // Mover's alternative: the pawn was never on d5.
     let mut g = game(&["Nc3/a3", "d5/6"]);
-    let r = g.play("Nxd5/ {Pd6}").unwrap();
+    let r = g.play("Ncxd5/ab5 {Pd6}").unwrap();
     assert_eq!(r.collapses, vec!["black pawn 4 collapsed to d6"]);
-    assert!(g.board_text().contains("white knight: d5 | a3"), "{}", g.board_text());
+    assert!(g.board_text().contains("white knight: d5 | b5"), "{}", g.board_text());
 
     // Not a consistent choice.
     let mut g = game(&["Nc3/a3", "d5/6"]);
-    assert!(g.play("Nxd5/ {Na3}").is_err());
+    assert!(g.play("Ncxd5/ab5 {Nb5}").is_err());
+}
+
+#[test]
+fn leaving_half_a_piece_behind_is_illegal() {
+    // Rule 3: on the boards where the staying half was real, nothing moved.
+    for (fen, mv) in [
+        (None, "Nf3/"),
+        (None, "e4/"),
+        (Some("4k3/8/8/8/8/8/8/2B1K3 w - - 0 1"), "Bd2/"),
+        (Some("k7/4P3/8/8/8/8/8/4K3 w - - 0 1"), "e8=Q/"),
+    ] {
+        let mut g = match fen {
+            Some(f) => Game::from_fen(f).unwrap(),
+            None => Game::new(),
+        };
+        let e = g.play(mv).unwrap_err();
+        assert!(e.0.contains("can't leave half"), "{mv}: {e}");
+    }
+    // A split piece can't move one half and leave the other either.
+    let mut g = game(&["Nc3/a3", "e5"]);
+    assert!(g.play("Ncd5/").is_err());
+    // Quantum castling is the exception: the rook moves on the other boards.
+    let mut g = fen_game("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1", &[]);
+    assert!(g.play("0-0/").is_ok());
+}
+
+#[test]
+fn moving_one_half_of_a_split_piece_collapses_it_there() {
+    // The other half can't make the move, so on its boards the move is
+    // impossible: the piece is proved to have been on the moving half.
+    let mut g = game(&["e4", "c6/5", "d4"]);
+    let r = g.play("c5c4").unwrap();
+    assert_eq!(r.collapses, vec!["black pawn 3 collapsed to c5"]);
+    // Moving both halves keeps the superposition.
+    let mut g = game(&["e4", "c6/5", "d4"]);
+    let r = g.play("c6c5/c5c4").unwrap();
+    assert!(r.collapses.is_empty(), "{:?}", r.collapses);
+    assert_eq!(g.state_count(), 2);
+}
+
+#[test]
+fn a_whole_piece_capturing_a_half_needs_no_collapse() {
+    // Rule sheet, "Capturing Quantum Pieces": the twin stays, alive and dead.
+    let mut g = game(&["Nc3/a3", "e5", "h3", "Bb4"]);
+    let n = g.state_count();
+    let r = g.play("h4").unwrap();
+    assert!(r.collapses.is_empty());
+    let r = g.play("Bxc3").unwrap();
+    assert!(r.collapses.is_empty(), "{:?}", r.collapses);
+    assert_eq!(g.state_count(), n);
+    assert!(g.board_text().contains("white knight: captured on c3 | a3"), "{}", g.board_text());
 }
 
 #[test]
@@ -106,11 +158,11 @@ fn capture_when_other_half_already_dead() {
     // The bishop ends up half-captured. Capturing its last half with another
     // quantum piece then needs no collapse.
     let mut g = fen_game("4k3/8/2b5/8/8/8/8/1R1NK3 w - - 0 1", &["Nc3/e3", "Bb5/d5"]);
-    let r = g.play("Nexd5/").unwrap();
+    let r = g.play("Nexd5/ca2 {Nd5}").unwrap();
     assert_eq!(r.collapses, vec!["white knight 1 collapsed to d5"]);
     assert!(g.board_text().contains("black bishop: b5 | captured on d5"), "{}", g.board_text());
     play_all(&mut g, &["Kd8", "Rb2/a1", "Ke8"]);
-    let r = g.play("Rxb5/").unwrap();
+    let r = g.play("Rbxb5/ab1").unwrap();
     assert!(r.collapses.is_empty(), "{:?}", r.collapses);
     assert_eq!(g.state_count(), 2);
     assert!(g.states_fen().iter().all(|f| !f.contains('b')));
@@ -224,7 +276,7 @@ fn pieces_split_captured_and_gone() {
     assert!(pawn.halves.iter().all(|h| h.alive && h.kind == Kind::Pawn));
 
     // Half-captured bishop: still listed, with a dead half.
-    let g = fen_game("4k3/8/2b5/8/8/8/8/1R1NK3 w - - 0 1", &["Nc3/e3", "Bb5/d5", "Nexd5/"]);
+    let g = fen_game("4k3/8/2b5/8/8/8/8/1R1NK3 w - - 0 1", &["Nc3/e3", "Bb5/d5", "Nexd5/ca2 {Nd5}"]);
     let b = g.pieces().into_iter().find(|p| p.halves[0].kind == Kind::Bishop).unwrap();
     assert!(b.split);
     assert_eq!(b.halves.iter().filter(|h| !h.alive).count(), 1);
@@ -379,12 +431,6 @@ fn last_move_squares_tracking() {
     v.sort();
     assert_eq!(v, ["b5", "c4", "f1"]);
 
-    // Stay-split: only the moving half.
-    let g = game(&["Nf3/"]);
-    let mut v = g.last_move_squares();
-    v.sort();
-    assert_eq!(v, ["f3", "g1"]);
-
     // Castling includes the rook.
     let g = fen_game("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1", &["0-0"]);
     let mut v = g.last_move_squares();
@@ -401,7 +447,7 @@ fn last_move_squares_tracking() {
 fn collapse_options_lists_choices_without_mutating() {
     let g = game(&["Nc3/a3", "d5/6"]);
     let before = g.states_fen();
-    let opts = g.collapse_options("Nxd5/").unwrap();
+    let opts = g.collapse_options("Ncxd5/ab5").unwrap();
     assert_eq!(opts.len(), 2, "{opts:?}");
     assert!(opts.contains(&"{Pd6}".to_string()), "{opts:?}");
     assert!(opts.contains(&"{Nd5}".to_string()), "{opts:?}");
@@ -412,9 +458,9 @@ fn collapse_options_lists_choices_without_mutating() {
 #[test]
 fn collapse_options_round_trip_through_play() {
     let g = game(&["Nc3/a3", "d5/6"]);
-    for opt in g.collapse_options("Nxd5/").unwrap() {
+    for opt in g.collapse_options("Ncxd5/ab5").unwrap() {
         let mut c = g.clone();
-        c.play(&format!("Nxd5/ {opt}")).unwrap_or_else(|e| panic!("{opt}: {e}"));
+        c.play(&format!("Ncxd5/ab5 {opt}")).unwrap_or_else(|e| panic!("{opt}: {e}"));
     }
     // Quantum check scenario: Kd7 must collapse the queen.
     let g = {
@@ -446,7 +492,7 @@ fn collapse_options_empty_or_error() {
     assert!(g.collapse_options("a3").is_err());
     // Existing {..} in the notation is ignored.
     let g = game(&["Nc3/a3", "d5/6"]);
-    assert_eq!(g.collapse_options("Nxd5/ {Pd6}").unwrap().len(), 2);
+    assert_eq!(g.collapse_options("Ncxd5/ab5 {Pd6}").unwrap().len(), 2);
 }
 
 #[test]
@@ -502,7 +548,12 @@ fn random_play_keeps_helpers_consistent() {
             }
             let mut mv = cands[next(cands.len())].clone();
             if g.state_count() < 16 && next(4) == 0 {
-                mv.push('/');
+                // A split: a second destination for the same half.
+                let from = &mv[mv.len() - 4..mv.len() - 2];
+                let others: Vec<String> = g.targets(from).into_iter().filter(|t| !mv.ends_with(t.as_str())).collect();
+                if !others.is_empty() {
+                    mv = format!("{mv}/{}", others[next(others.len())]);
+                }
             }
             let before = g.states_fen();
             let Ok(opts) = g.collapse_options(&mv) else {
@@ -580,10 +631,9 @@ fn moving_a_split_piece_whole_reports_its_collapse() {
 
 #[test]
 fn collapse_options_name_the_piece_when_two_share_a_square() {
-    // Found by the fuzzer: both white knights end up with halves on a3 and d2.
-    let h = ["h2h3", "h7h5/h6", "g2g4/", "f7f6", "g4g5", "Ng8h6", "f2f4/f3", "a7a6", "Ng1f3/", "e7e6",
-        "Rh1h2/g1", "Bf8d6/c5", "Nf3e5/", "Bc5e7", "d2d4", "Nh6f5", "Nf3e5", "Rh8h7/", "Rg1h1/g2", "Nf5d4",
-        "Ne5c4/f3", "h5h4/", "Nc4a3/f3d2", "Ke8f8/"];
+    // The g1 knight splits onto a3 and d2; the b1 knight then splits onto
+    // the same two squares.
+    let h = ["d2d4", "a7a6", "Ng1f3", "a6a5", "Nf3e5", "h7h6", "Ne5c4", "h6h5", "Nc4a3/d2", "g7g6"];
     let g = Game::from_history(&h).unwrap();
     let opts = g.collapse_options("Nb1a3/d2").unwrap();
     assert!(opts.len() > 1, "{opts:?}");
@@ -595,14 +645,8 @@ fn collapse_options_name_the_piece_when_two_share_a_square() {
 }
 
 #[test]
-fn no_en_passant_after_a_whole_move_of_a_split_pawn() {
-    // Found by the fuzzer. The black e-pawn ends up certainly on e6 after a
-    // whole move; one impossible branch spanned e4->e6, which used to be
-    // mistaken for a double push and offered en passant onto e5.
-    let g = Game::from_history(&["Nb1c3/a3", "e7e5/", "f2f4/", "h7h5/", "h2h3/", "e5e4/", "Na3b5/b1", "e7e6"]).unwrap();
-    assert_eq!(g.targets("f4"), vec!["f5"]);
-    assert!(g.clone().play("f4e5").is_err());
-    // A genuine double push still allows en passant.
+fn en_passant_after_a_genuine_double_push() {
+    // A genuine double push allows en passant.
     let mut g = Game::from_history(&["e2e4", "a7a6", "e4e5", "d7d5"]).unwrap();
     assert!(g.targets("e5").contains(&"d6".to_string()));
     g.play("e5d6").unwrap();

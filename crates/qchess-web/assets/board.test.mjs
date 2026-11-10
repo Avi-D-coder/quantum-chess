@@ -8,7 +8,6 @@ test('buildNotation: PROTOCOL table', () => {
   assert.equal(B({ kind: 'knight', from: 'b1', to: 'c3' }), 'Nb1c3');
   assert.equal(B({ kind: 'pawn', from: 'e2', to: 'e4' }), 'e2e4');
   assert.equal(B({ kind: 'knight', from: 'b1', to: 'c3', to2: 'a3' }), 'Nb1c3/a3');
-  assert.equal(B({ kind: 'knight', from: 'b1', to: 'c3', stay: true }), 'Nb1c3/');
   assert.equal(B({ kind: 'knight', from: 'a3', to: 'b5', from2: 'c3', to2: 'd5' }), 'Na3b5/c3d5');
   assert.equal(B({ kind: 'pawn', from: 'e7', to: 'e8', promo: 'Q' }), 'e7e8=Q');
   assert.equal(B({ kind: 'pawn', from: 'e7', to: 'e8', to2: 'e8', promo: 'Q', promo2: 'N' }), 'e7e8=Q/=N');
@@ -30,35 +29,43 @@ const pcs = [
 ];
 const targets = { e7: ['e8', 'd8'], a3: ['b5'], c3: ['d5'], b1: ['c3x', 'd2'], e1: ['g1', 'c1', 'e2'] };
 const ctx = { you: 'white', pieces: pcs, targets };
-const run = (acts, split) => {
-  let ui = newInput(split), out;
+const run = (acts) => {
+  let ui = newInput(), out;
   for (const a of acts) { const r = reduceInput(ui, a, ctx); ui = r.ui; if (r.notation) out = r.notation; }
   return { ui, out };
 };
-const c = (sq, shift) => ({ t: 'click', sq, shift });
+const c = (sq) => ({ t: 'click', sq });
 
-test('reducer: normal move, selection, cancel', () => {
-  assert.equal(run([c('b1'), c('d2')]).out, 'Nb1d2');
+test('reducer: both halves are always placed; same square is an ordinary move', () => {
+  assert.equal(run([c('b1'), c('d2')]).ui.phase, 'second');
+  assert.equal(run([c('b1'), c('d2'), c('d2')]).out, 'Nb1d2');
   assert.equal(run([c('b1'), c('b1')]).ui.phase, 'idle');
   assert.equal(run([c('b1'), { t: 'cancel' }]).ui.phase, 'idle');
   assert.equal(run([c('h5')]).ui.phase, 'idle');
+  // A second square that isn't a target cancels.
+  assert.equal(run([c('b1'), c('d2'), c('h5')]).ui.phase, 'idle');
 });
-test('reducer: split piece halves and stay', () => {
-  assert.equal(run([c('a3'), c('b5')]).out, 'Na3b5');
-  assert.equal(run([c('a3'), c('b5'), c('c3'), c('d5')], true).out, 'Na3b5/c3d5');
-  assert.equal(run([c('a3'), c('b5'), { t: 'stay' }], true).out, 'Na3b5/');
-  assert.equal(run([c('b1', true), c('d2'), { t: 'stay' }]).out, 'Nb1d2/');
+test('reducer: split and split pieces', () => {
+  assert.equal(run([c('b1'), c('d2'), c('c3x')]).out, 'Nb1d2/c3x');
+  // Split piece: each half moves; the second click is the twin's destination.
+  assert.equal(run([c('a3'), c('b5'), c('d5')]).out, 'Na3b5/c3d5');
+  // The twin can't reach b5, so moving only this half is offered explicitly.
+  const r = run([c('a3'), c('b5')]);
+  assert.equal(r.ui.phase, 'second');
+  assert.equal(reduceInput(r.ui, { t: 'only' }, ctx).notation, 'Na3b5');
+  // There is no stay move.
+  assert.equal(reduceInput(run([c('b1'), c('d2')]).ui, { t: 'only' }, ctx).notation, undefined);
 });
 test('reducer: promotion + castling', () => {
-  let r = run([c('e7'), c('e8')]);
-  assert.equal(r.ui.phase, 'promo1');
-  assert.equal(run([c('e7'), c('e8'), { t: 'promo', p: 'Q' }]).out, 'e7e8=Q');
-  assert.equal(run([c('e7'), c('e8'), c('e8'), { t: 'promo', p: 'Q' }, { t: 'promo', p: 'N' }], true).out, 'e7e8=Q/=N');
-  assert.equal(run([c('e7'), c('e8'), { t: 'stay' }, { t: 'promo', p: 'R' }], true).out, 'e7e8=R/');
-  assert.equal(run([c('e1'), c('g1')]).out, '0-0');
-  assert.equal(run([c('e1'), c('c1'), { t: 'stay' }], true).out, '0-0-0/');
+  assert.equal(run([c('e7'), c('e8')]).ui.phase, 'promo1');
+  assert.equal(run([c('e7'), c('e8'), { t: 'promo', p: 'Q' }, c('e8'), { t: 'promo', p: 'Q' }]).out, 'e7e8=Q');
+  assert.equal(run([c('e7'), c('e8'), { t: 'promo', p: 'Q' }, c('e8'), { t: 'promo', p: 'N' }]).out, 'e7e8=Q/=N');
+  assert.equal(run([c('e7'), c('e8'), { t: 'promo', p: 'Q' }, c('d8'), { t: 'promo', p: 'R' }]).out, 'e7e8=Q/d8=R');
+  assert.equal(run([c('e1'), c('g1'), c('g1')]).out, '0-0');
+  assert.equal(run([c('e1'), c('c1'), c('e1')]).out, '0-0-0/');
+  // Castling can't be split with a king step.
+  assert.deepEqual(Q.secondTargets(run([c('e1'), c('e2')]).ui, ctx), ['e2']);
 });
-
 test('describeOption', () => {
   assert.equal(Q.describeOption('{Pd6}'), 'Pawn stays on d6');
   assert.equal(Q.describeOption('{xPd5}'), 'Pawn captured on d5');

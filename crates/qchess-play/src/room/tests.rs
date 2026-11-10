@@ -214,10 +214,10 @@ fn collapse_choice_then_play() {
     let mut r = room();
     r.play(W, "Nb1c3/a3", 1).unwrap();
     r.play(B, "d7d5/6", 2).unwrap();
-    let ev = r.play(W, "Nc3d5/", 3).unwrap();
+    let ev = r.play(W, "Nc3d5/a3b5", 3).unwrap();
     assert_eq!(ev.len(), 1);
     let Event::NeedsCollapseChoice { notation, options } = &ev[0] else { panic!("{ev:?}") };
-    assert_eq!(notation, "Nc3d5/");
+    assert_eq!(notation, "Nc3d5/a3b5");
     assert_eq!(options.len(), 2);
     assert!(options.contains(&"{Pd6}".to_string()) && options.contains(&"{Nd5}".to_string()));
     // nothing changed
@@ -237,9 +237,9 @@ fn collapse_choice_second_option_also_plays() {
     let mut r = room();
     r.play(W, "Nb1c3/a3", 1).unwrap();
     r.play(B, "d7d5/6", 2).unwrap();
-    let ev = r.play(W, "Nc3d5/", 3).unwrap();
+    let ev = r.play(W, "Nc3d5/a3b5", 3).unwrap();
     let Event::NeedsCollapseChoice { options, .. } = &ev[0] else { panic!() };
-    r.play(W, &format!("Nc3d5/ {}", options[1]), 4).unwrap();
+    r.play(W, &format!("Nc3d5/a3b5 {}", options[1]), 4).unwrap();
     assert_eq!(r.plies(), 3);
 }
 
@@ -248,7 +248,7 @@ fn bad_collapse_choice_is_illegal() {
     let mut r = room();
     r.play(W, "Nb1c3/a3", 1).unwrap();
     r.play(B, "d7d5/6", 2).unwrap();
-    let e = r.play(W, "Nc3d5/ {Qd1}", 3).unwrap_err();
+    let e = r.play(W, "Nc3d5/a3b5 {Qd1}", 3).unwrap_err();
     assert!(matches!(e, RoomError::IllegalMove(_)), "{e:?}");
     assert_eq!(r.plies(), 2);
 }
