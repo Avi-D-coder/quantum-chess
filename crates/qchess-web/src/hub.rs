@@ -12,17 +12,14 @@ use std::{
 
 use glicko2::Rating;
 use qchess_play::{
-    ChatLine, ColorPref, Event, Lobby, LobbyError, PlayerInfo, Room, RoomError, RoomInit, Seek, TimeControl,
+    ColorPref, Event, Lobby, LobbyError, PlayerInfo, Room, RoomError, RoomInit, Seek, TimeControl,
 };
 use rand::Rng;
 use serde_json::{Value, json};
 use tokio::sync::broadcast;
 
-use crate::{
-    bot::Level,
-    db::{Db, MoveRow, User, now_ms},
-    json,
-};
+use qchess_play::{bot::Level, json};
+use crate::db::{Db, MoveRow, User, now_ms};
 
 /// Seconds without a move after which an unstarted game is aborted.
 const ABORT_AFTER_MS: u64 = 30_000;
@@ -538,9 +535,7 @@ fn avg_rating(r: &Room) -> i64 {
     (rating_of(r.white()) + rating_of(r.black())) / 2
 }
 
-pub fn chat_json(l: &ChatLine) -> Value {
-    json!({ "type": "chat", "user": l.username, "text": l.text, "ts": l.ts })
-}
+pub use qchess_play::json::chat_json;
 
 /// Ratings are stored per speed; used by pages.
 pub fn rating_display(r: Rating) -> i64 {

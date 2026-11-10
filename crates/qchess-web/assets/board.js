@@ -422,10 +422,14 @@
       else { this.hist = null; this.loadHistory(); }
     }
     loadHistory() {
-      const url = this.opts.historyUrl;
-      if (!url || this.histLoading || !root || !root.fetch) return;
+      // opts.loadHistory (a function returning a promise of the positions)
+      // replaces fetching opts.historyUrl, e.g. for a game run in the browser.
+      const url = this.opts.historyUrl, load = this.opts.loadHistory;
+      if ((!url || !root || !root.fetch) && !load) return;
+      if (this.histLoading) return;
       this.histLoading = true;
-      root.fetch(url).then((r) => (r.ok ? r.json() : null)).then((p) => {
+      const p0 = load ? load() : root.fetch(url).then((r) => (r.ok ? r.json() : null));
+      p0.then((p) => {
         this.histLoading = false;
         const n = this.state && !this.state.positions ? (this.state.moves || []).length : -1;
         if (Array.isArray(p) && p.length === n + 1) {

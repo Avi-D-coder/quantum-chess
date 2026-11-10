@@ -1,0 +1,6 @@
+/* Additions for the Cloudflare-hosted site (no accounts). */
+#me { color: var(--muted); }
+#me button.linklike { margin-left: 4px; }
+#me input { width: 11em; padding: 3px 6px; }
+.local-bar { display: flex; gap: 8px; justify-content: center; margin: 14px 0; }
+.online { float: right; font-weight: 400; }

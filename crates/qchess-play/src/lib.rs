@@ -9,12 +9,22 @@
 //! * [`TimeControl`] / [`Clock`] — clocks (see [`time`]).
 //! * [`Room`] — one live game, with chat, draw offers and a clock (see [`room`]).
 //! * [`Lobby`] — open seeks and friend challenges (see [`lobby`]).
+//! * [`bot::Level`] — computer opponent levels.
+//! * `json` (feature `json`) — the wire format of docs/PROTOCOL.md.
+//!
+//! Feature `serde` derives `Serialize`/`Deserialize` for the lobby types, so a
+//! host can persist them.
 #![deny(missing_docs)]
 
+pub mod action;
+pub mod bot;
+#[cfg(feature = "json")]
+pub mod json;
 pub mod lobby;
 pub mod room;
 pub mod time;
 
+pub use action::{Action, Logged};
 pub use lobby::{Challenge, ColorPref, Lobby, LobbyError, RoomInit, Seek};
 pub use qchess::Color;
 pub use room::{

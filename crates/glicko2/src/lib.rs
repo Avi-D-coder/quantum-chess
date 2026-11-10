@@ -14,6 +14,7 @@ const BASE_RATING: f64 = 1500.0;
 
 /// A player's rating state on the Glicko (not Glicko-2) display scale.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Rating {
     /// Rating `r`; 1500 is average.
     pub rating: f64,

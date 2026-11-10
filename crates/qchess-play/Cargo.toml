@@ -11,3 +11,11 @@ publish = false
 [dependencies]
 qchess = { path = "../qchess" }
 glicko2 = { path = "../glicko2" }
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
+
+[features]
+# The protocol JSON of docs/PROTOCOL.md.
+json = ["dep:serde_json"]
+# Serialize/Deserialize for the lobby types (for hosts that persist them).
+serde = ["dep:serde", "glicko2/serde"]

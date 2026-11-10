@@ -8,3 +8,8 @@ repository.workspace = true
 publish = false
 
 [dependencies]
+serde = { version = "1", features = ["derive"], optional = true }
+
+[features]
+# Serialize/Deserialize for `Rating`.
+serde = ["dep:serde"]

@@ -17,6 +17,7 @@ pub const ABORT_PLIES: usize = 2;
 
 /// A participant in a game.
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PlayerInfo {
     /// Account id.
     pub user_id: i64,

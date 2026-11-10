@@ -12,6 +12,9 @@ publish = false
 # Independent chess rules used only as a fuzzing oracle.
 shakmaty = { version = "0.27", optional = true }
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-time = "1"
+
 [features]
 # Exposes `qchess::fuzzing` for the cargo-fuzz targets in `fuzz/`.
 fuzzing = ["dep:shakmaty"]

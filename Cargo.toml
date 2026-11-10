@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/qchess", "crates/glicko2", "crates/qchess-play", "crates/qchess-web"]
+members = ["crates/qchess", "crates/glicko2", "crates/qchess-play", "crates/qchess-web", "crates/qchess-worker", "crates/qchess-wasm"]
 
 [workspace.package]
 version = "0.1.0"

@@ -40,6 +40,8 @@ cargo run -p qchess --example sheet   # plays a short quantum opening and prints
 | `crates/qchess-play` | framework-free game logic: rooms, clocks, lobby, draw offers, chat |
 | `crates/glicko2` | Glicko-2 ratings |
 | `crates/qchess-web` | the site, built with [Topcoat](https://github.com/tokio-rs/topcoat), SQLite and a vanilla-JS board (`assets/board.js`) |
+| `crates/qchess-worker` | the same game without accounts, as a Cloudflare Worker with Durable Objects, plus its static site (`site/`) |
+| `crates/qchess-wasm` | the engine, game room and computer player compiled to WebAssembly, for games against the computer in the browser |
 
 Docs: [RULES.md](docs/RULES.md) (the game), [PLAN.md](docs/PLAN.md) (how the site is put
 together) and [PROTOCOL.md](docs/PROTOCOL.md) (the WebSocket messages between board and server).
@@ -110,6 +112,58 @@ HTTPS reverse proxy (Caddy, nginx, `tailscale serve`, ...) that passes WebSocket
 through. Keep `HOST=127.0.0.1` so only the proxy can reach it. Set `PUBLIC_URL` to the public
 `https://` origin and configure at least one sign-in provider (below). Back up the SQLite file,
 and run a single instance.
+
+### Hosting on Cloudflare (free plan)
+
+`crates/qchess-worker` is a second way to host the game, on Cloudflare's free Workers plan.
+There are no accounts and no ratings: each browser keeps a random secret id and a name you can
+change in the header. You get quick pairing, friend challenges by link, spectating, chat, and
+games against the computer, which run entirely in your browser (WebAssembly in a Web Worker)
+and are saved in it, so a reload resumes the game.
+
+How it fits together:
+
+- The static site (`site/`, plus `board.js` and the CSS from `qchess-web`) is served as
+  Workers static assets.
+- `/ws/lobby` goes to one Durable Object holding the seeks, challenges and live games.
+- `/ws/game/{id}` goes to one Durable Object per game, wrapping a `qchess_play::Room`.
+- Both use hibernatable WebSockets, so a game costs nothing while the players think. When
+  Cloudflare evicts an idle object, it rebuilds from what it stored: the lobby as one JSON
+  value, a game as its setup plus its action log (`qchess_play::action`), replayed on wake-up.
+  Timeouts and aborting unstarted games run on Durable Object alarms.
+- Finished games stay viewable for an hour, then are deleted.
+
+Requirements: Node (for `npx wrangler`), the `wasm32-unknown-unknown` target and two cargo
+tools:
+
+```sh
+rustup target add wasm32-unknown-unknown
+cargo install worker-build@0.8.7 wasm-bindgen-cli@0.2.130
+```
+
+Run it locally (wrangler builds everything with `crates/qchess-worker/build.sh`):
+
+```sh
+cd crates/qchess-worker
+npx wrangler dev
+```
+
+Deploy (needs a free Cloudflare account; `login` opens a browser once):
+
+```sh
+cd crates/qchess-worker
+npx wrangler login
+npx wrangler deploy
+```
+
+The site comes up at `https://quantum-chess.<your-subdomain>.workers.dev` (rename it in
+`wrangler.toml`).
+
+**Cost.** On the free plan nothing can be billed: when a daily limit is reached (100,000 Worker
+requests, plus Durable Object request, duration and storage limits), further requests fail
+until the limits reset at 00:00 UTC. Static files don't count. So the worst case is downtime,
+not a bill. To keep that guarantee, stay on the free plan; the $5 Workers Paid plan bills
+usage above its allowance and has no spending cap.
 
 ## Configuration
 

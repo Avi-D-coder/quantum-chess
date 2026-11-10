@@ -12,6 +12,7 @@ pub const CHALLENGE_TTL_MS: u64 = 24 * 60 * 60 * 1000;
 
 /// Which color the creator of a seek or challenge wants.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ColorPref {
     /// Decided by a coin flip when the game starts.
     Random,
@@ -44,6 +45,7 @@ impl ColorPref {
 
 /// Everything [`Room::new`](crate::Room::new) needs.
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RoomInit {
     /// Id for the new game.
     pub game_id: String,
@@ -89,6 +91,7 @@ impl std::error::Error for LobbyError {}
 
 /// An open invitation to play, visible in the lobby.
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Seek {
     /// Seek id (chosen by the caller).
     pub id: String,
@@ -112,6 +115,7 @@ pub struct Seek {
 
 /// A private challenge reachable only through its token (a link).
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Challenge {
     /// Secret token (chosen by the caller).
     pub token: String,
@@ -129,6 +133,7 @@ pub struct Challenge {
 
 /// Open seeks and pending friend challenges.
 #[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Lobby {
     seeks: Vec<Seek>,
     challenges: Vec<Challenge>,

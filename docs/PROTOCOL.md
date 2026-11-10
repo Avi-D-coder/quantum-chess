@@ -1,7 +1,22 @@
 # Live game protocol (browser ⇄ server)
 
-JSON messages over one WebSocket per game page, at `/game/{id}/ws`. The server
-code is in `crates/qchess-web/src/json.rs` and `hub.rs`.
+JSON messages over one WebSocket per game page, at `/game/{id}/ws`. The wire
+format is built in `crates/qchess-play/src/json.rs`; the Topcoat server's side
+is in `crates/qchess-web/src/hub.rs`.
+
+The Cloudflare version (`crates/qchess-worker`) uses the same game messages at
+`/ws/game/{id}?pid=…&name=…` (no ratings: `rating` is `null`), and a lobby
+socket at `/ws/lobby?pid=…&name=…` instead of the HTTP lobby API. `pid` is the
+browser's random secret; the player id is derived from it. Games against the
+computer use the same messages, answered inside the browser by `qchess-wasm`.
+
+Lobby socket, client → server: `{"type":"seek","tc":"5+3","color":"random"}`,
+`{"type":"cancel","id":…}`, `{"type":"accept","id":…}`,
+`{"type":"challenge","tc":…,"color":…}`, `{"type":"challenge_info","token":…}`,
+`{"type":"challenge_accept","token":…}`, `{"type":"challenge_cancel","token":…}`.
+Server → client: `lobby` (`seeks` with `mine`, `games`, `tcs`, `online`),
+`matched` (`game`), `challenge` (`token`), `challenge_info` (`found`, and
+either `game` or `creator`/`tc`/`color`/`mine`), `challenge_cancelled`, `error`.
 
 ## Server → client
 

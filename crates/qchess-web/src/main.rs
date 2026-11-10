@@ -1,9 +1,7 @@
 mod app;
 mod auth;
-mod bot;
 mod db;
 mod hub;
-mod json;
 
 use std::{sync::Arc, time::Duration};
 

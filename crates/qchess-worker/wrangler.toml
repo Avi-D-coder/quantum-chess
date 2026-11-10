@@ -1,0 +1,24 @@
+# Cloudflare Workers config. Free plan friendly: static assets are free, and
+# the Durable Objects are SQLite-backed (the only kind the free plan allows).
+name = "quantum-chess"
+main = "build/worker/shim.mjs"
+compatibility_date = "2026-09-01"
+
+[build]
+command = "./build.sh"
+
+[assets]
+directory = "dist"
+binding = "ASSETS"
+
+[[durable_objects.bindings]]
+name = "LOBBY"
+class_name = "LobbyObject"
+
+[[durable_objects.bindings]]
+name = "GAME"
+class_name = "GameObject"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["LobbyObject", "GameObject"]

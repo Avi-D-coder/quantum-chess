@@ -1,9 +1,10 @@
-//! Wire format of docs/PROTOCOL.md.
+//! Wire format of docs/PROTOCOL.md (feature `json`).
 
 use qchess::{Game, PieceView};
-use qchess_play::{ClockView, MoveRecord, StateView, StatusView, color_str};
+use crate::{Action, ChatLine, Event, ClockView, MoveRecord, StateView, StatusView, color_str};
 use serde_json::{Value, json};
 
+/// JSON for the protocol (see docs/PROTOCOL.md).
 pub fn pieces_json(pieces: &[PieceView]) -> Value {
     pieces
         .iter()
@@ -22,6 +23,7 @@ pub fn pieces_json(pieces: &[PieceView]) -> Value {
         .collect()
 }
 
+/// JSON for the protocol (see docs/PROTOCOL.md).
 pub fn clock_json(c: &ClockView) -> Value {
     json!({
         "initial_ms": c.initial_ms,
@@ -33,6 +35,7 @@ pub fn clock_json(c: &ClockView) -> Value {
     })
 }
 
+/// JSON for the protocol (see docs/PROTOCOL.md).
 pub fn move_json(m: &MoveRecord) -> Value {
     json!({
         "ply": m.ply, "notation": m.notation, "display": m.display, "collapses": m.collapses,
@@ -87,6 +90,52 @@ pub fn positions_json(history: &[String]) -> Option<Value> {
             .map(|g| json!({ "pieces": pieces_json(&g.pieces()), "last_move": g.last_move_squares() }))
             .collect(),
     )
+}
+
+/// A `chat` message.
+pub fn chat_json(l: &ChatLine) -> Value {
+    json!({ "type": "chat", "user": l.username, "text": l.text, "ts": l.ts })
+}
+
+/// Parses a client message of docs/PROTOCOL.md into an action by player
+/// `user` (shown as `name`). The error is the text of an `error` message.
+pub fn client_action(msg: &Value, user: i64, name: &str) -> Result<Action, String> {
+    let str_field = |k: &str| msg.get(k).and_then(Value::as_str).unwrap_or("").to_string();
+    Ok(match msg.get("type").and_then(Value::as_str).unwrap_or("") {
+        "move" => Action::Move { u: user, n: str_field("notation") },
+        "resign" => Action::Resign { u: user },
+        "abort" => Action::Abort { u: user },
+        "draw_offer" => Action::OfferDraw { u: user },
+        "draw_accept" => Action::AcceptDraw { u: user },
+        "draw_decline" => Action::DeclineDraw { u: user },
+        "chat" => Action::Chat { u: user, name: name.to_string(), text: str_field("text") },
+        _ => return Err("unknown message".into()),
+    })
+}
+
+/// The `choose_collapse` message among `events`, if a move needs a choice.
+pub fn collapse_choice(events: &[Event]) -> Option<Value> {
+    events.iter().find_map(|e| match e {
+        Event::NeedsCollapseChoice { notation, options } => {
+            Some(json!({ "type": "choose_collapse", "notation": notation, "options": options }))
+        }
+        _ => None,
+    })
+}
+
+/// Removes the ratings from a `state` message, for sites without ratings
+/// (the board then shows names only).
+pub fn hide_ratings(state: &mut Value) {
+    for side in ["white", "black"] {
+        if let Some(p) = state.get_mut("players").and_then(|p| p.get_mut(side)) {
+            p["rating"] = Value::Null;
+        }
+    }
+}
+
+/// An `error` message.
+pub fn error_json(message: impl std::fmt::Display) -> Value {
+    json!({ "type": "error", "message": message.to_string() })
 }
 
 #[cfg(test)]

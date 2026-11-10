@@ -23,8 +23,8 @@ use super::{app, current_user};
 use crate::{
     db::{User, now_ms},
     hub::{ActionError, App, Bc, Live},
-    json::{clock_json, move_json, pieces_json, positions_json},
 };
+use qchess_play::json::{clock_json, move_json, pieces_json, positions_json};
 use std::sync::Arc;
 
 topcoat::router::path_param!(id);

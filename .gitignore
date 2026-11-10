@@ -39,3 +39,9 @@ crates/qchess/fuzz/coverage/
 *.p8
 *.pem
 *.key
+
+# Cloudflare Worker build output and local wrangler state
+crates/qchess-worker/build/
+crates/qchess-worker/dist/
+.wrangler/
+node_modules/

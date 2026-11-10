@@ -27,6 +27,9 @@ document describes how the pieces fit. For setup and commands see the README.
 crates/
   qchess/        engine (std only): rules, notation, AI
   qchess-play/   framework-free game logic: rooms, clocks, lobby (time is passed in)
+    src/action.rs      room actions as data, for logging and replay
+    src/bot.rs         computer opponents and their time budgets
+    src/json.rs        wire format (see PROTOCOL.md), feature `json`
   glicko2/       Glicko-2 ratings
   qchess-web/    Topcoat app
     src/main.rs        startup, 250 ms ticker for clocks and timeouts
@@ -35,9 +38,11 @@ crates/
     src/auth.rs        generic OAuth code + PKCE flow, providers, Apple client secret
     src/db.rs          SQLite (rusqlite); the schema is created on start
     src/hub.rs         shared state: lobby, live rooms, broadcast channels
-    src/bot.rs         computer opponents and their time budgets
-    src/json.rs        wire format (see PROTOCOL.md)
     assets/board.js    quantum board UI (vanilla JS)
+  qchess-worker/ the game without accounts on Cloudflare Workers + Durable Objects
+    src/lib.rs         Worker routing, LobbyObject, GameObject
+    site/              static pages; build.sh adds board.js, CSS and the wasm
+  qchess-wasm/   engine, room and computer player for the browser (Web Worker)
 ```
 
 ### Pages and routes

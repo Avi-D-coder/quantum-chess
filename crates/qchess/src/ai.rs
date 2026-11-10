@@ -27,7 +27,12 @@
 //! * There's no opening book and no endgame tablebase.
 
 use std::collections::{HashMap, HashSet};
-use std::time::{Duration, Instant};
+use std::time::Duration;
+// std::time::Instant panics on wasm32-unknown-unknown; web-time uses performance.now() there.
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::Instant;
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
 
 use crate::board::{KING_SIDE, QUEEN_SIDE};
 use crate::notation::{Hint, Intent, Second};

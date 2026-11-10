@@ -4,20 +4,27 @@ use std::time::Duration;
 
 use qchess::ai::Config;
 
+/// A difficulty level of the computer opponent.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Level {
+    /// Depth 1, with random blunders.
     Easy,
+    /// Depth 2.
     Medium,
+    /// Up to depth 6, with pruning.
     Hard,
 }
 
 impl Level {
+    /// Every level, easiest first.
     pub const ALL: [Level; 3] = [Level::Easy, Level::Medium, Level::Hard];
 
+    /// Parses [`key`](Self::key).
     pub fn parse(s: &str) -> Option<Level> {
         Level::ALL.into_iter().find(|l| l.key() == s)
     }
 
+    /// `"easy"`, `"medium"` or `"hard"`.
     pub fn key(self) -> &'static str {
         match self {
             Level::Easy => "easy",
@@ -61,14 +68,9 @@ mod tests {
     fn levels_round_trip_and_respect_the_clock() {
         for l in Level::ALL {
             assert_eq!(Level::parse(l.key()), Some(l));
-            assert!(valid_name(l.username()));
         }
         assert_eq!(Level::Hard.config(10 * 60_000, 0).time, Some(Duration::from_millis(4_000)));
         assert_eq!(Level::Hard.config(3_000, 0).time, Some(Duration::from_millis(100)));
         assert_eq!(Level::Easy.config(0, 0).time, Some(Duration::from_millis(50)));
-    }
-
-    fn valid_name(n: &str) -> bool {
-        crate::db::Db::valid_username(n)
     }
 }

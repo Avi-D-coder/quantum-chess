@@ -4,6 +4,7 @@ use crate::Color;
 
 /// A clock setting: initial time and per-move increment, in milliseconds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TimeControl {
     /// Initial time for each side.
     pub initial_ms: u64,
